@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Distribution / Packaging
+dist/
+build/
+*.egg-info/
+
+# PyInstaller
+*.spec
+
+# User specific
+.asr_token
+
+# Embedded Python (Excluded from git, use Release for full package)
+python/
+!python/README_SETUP.md
+
+# Logs and Results
+*.log
+*_text.json
+*_sum.md
