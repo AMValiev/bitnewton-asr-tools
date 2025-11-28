@@ -66,6 +66,7 @@ def main():
     # Если запрошен список промптов
     if args.list_prompts:
         from prompts_manager import PromptManager
+        pm = PromptManager(client)
         prompts = pm.get_all_prompts()
         if prompts:
             print(json.dumps(prompts, indent=2, ensure_ascii=False))

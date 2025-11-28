@@ -109,6 +109,7 @@ def main():
             from summarizer import SummarizerClient
             import json
             sum_client = SummarizerClient(token=token)
+            pm = PromptManager(sum_client)
             prompts = pm.get_all_prompts()
             if prompts:
                 print(json.dumps(prompts, indent=2, ensure_ascii=False))
