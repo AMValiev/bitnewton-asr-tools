@@ -79,7 +79,7 @@ def main():
     parser.add_argument("--default", action="store_true",
                         help="Использовать параметры по умолчанию для саммаризации без интерактивных вопросов")
     parser.add_argument("--list-prompts", action="store_true",
-                        help="Вывести список всех доступных промптов в формате JSON и выйти")
+                        help="Показать список промптов (включая из папки 'prompts' в корне программы) и завершить работу")
     
     # Если запуск без аргументов, выводим справку
     if len(sys.argv) == 1:
@@ -105,14 +105,16 @@ def main():
     # Если запрошен список промптов
     if args.list_prompts:
         try:
+            from prompts_manager import PromptManager
             from summarizer import SummarizerClient
             import json
             sum_client = SummarizerClient(token=token)
-            prompts = sum_client.get_prompts()
+            prompts = pm.get_all_prompts()
             if prompts:
                 print(json.dumps(prompts, indent=2, ensure_ascii=False))
             else:
                 print("Не удалось получить список промптов.")
+            print(f"\nПапка с кастомными промптами: {pm.prompts_dir.resolve()}")
         except ImportError:
             print("Ошибка: Модуль summarizer.py не найден.")
         except Exception as e:
@@ -261,79 +263,19 @@ def main():
                     
                     # Если prompt_id не был явно указан и не установлен --default, спрашиваем
                     if prompt_id == "meeting_detailed" and "--prompt-id" not in sys.argv and not args.default:
-                        print("\nПолучение списка промптов...")
-                        prompts = sum_client.get_prompts()
+                        from prompts_manager import PromptManager
+                        pm = PromptManager(sum_client)
                         
-                        if prompts:
-                            print("\nДоступные промпты:")
-                            prompts_list = []
-                            
-                            # Нормализация списка промптов (API может вернуть список или словарь)
-                            if isinstance(prompts, dict):
-                                prompts_list = list(prompts.values())
-                            elif isinstance(prompts, list):
-                                prompts_list = prompts
-                            
-                            if prompts_list:
-                                for i, prompt in enumerate(prompts_list, 1):
-                                    if isinstance(prompt, dict):
-                                        # Используем title или name, или id как запасной вариант
-                                        name = prompt.get('title') or prompt.get('name') or prompt.get('id', 'N/A')
-                                        print(f"{i}. {name}")
-                                        
-                                        # Вывод деталей промпта
-                                        user_part = prompt.get('user_prompt_part')
-                                        if user_part:
-                                            # \033[3m - курсив, \033[0m - сброс
-                                            print(f"   Инструкции: \033[3m{user_part}\033[0m")
-                                    else:
-                                        print(f"{i}. {prompt}")
-                                
-                                # Добавляем опцию для произвольного запроса
-                                custom_option_index = len(prompts_list) + 1
-                                print(f"{custom_option_index}. Произвольный запрос (Custom Prompt)")
-                            else:
-                                print(json.dumps(prompts, indent=2, ensure_ascii=False))
-                            
-                            try:
-                                choice = input(f"\nВыберите номер (1-{custom_option_index}, Enter для 1): ").strip()
-                                
-                                if not choice:
-                                    if prompts_list:
-                                        selected_prompt = prompts_list[0]
-                                        prompt_id = selected_prompt.get('id') if isinstance(selected_prompt, dict) else selected_prompt
-                                        print(f"Используется промпт по умолчанию: {prompt_id}")
-                                    else:
-                                        print("Список промптов пуст, используется meeting_detailed")
-                                        prompt_id = "meeting_detailed"
-                                elif choice.isdigit():
-                                    idx = int(choice) - 1
-                                    if 0 <= idx < len(prompts_list):
-                                        selected_prompt = prompts_list[idx]
-                                        prompt_id = selected_prompt.get('id') if isinstance(selected_prompt, dict) else selected_prompt
-                                    elif idx == len(prompts_list):
-                                        # Выбран произвольный запрос
-                                        print("\nВведите ваш промпт (для завершения нажмите Enter дважды):")
-                                        lines = []
-                                        while True:
-                                            try:
-                                                line = input()
-                                                if not line:
-                                                    break
-                                                lines.append(line)
-                                            except EOFError:
-                                                break
-                                        user_prompt = "\n".join(lines)
-                                        prompt_id = "custom"
-                                        print("Принят произвольный запрос.")
-                                    else:
-                                        print("Неверный номер, используется meeting_detailed")
-                                        prompt_id = "meeting_detailed"
-                                else:
-                                    prompt_id = choice
-                            except (KeyboardInterrupt, EOFError):
-                                print("\nОтменено пользователем, пропускаем саммаризацию.")
-                                prompt_id = None
+                        selected_id, selected_content = pm.select_prompt_interactive()
+                        
+                        if selected_id:
+                            prompt_id = selected_id
+                            if selected_content:
+                                user_prompt = selected_content
+                        else:
+                            # Если отменили или ошибка, используем дефолт
+                            print("Используется промпт по умолчанию: meeting_detailed")
+                            prompt_id = "meeting_detailed"
                     
                     if prompt_id:
                         # Определяем модель
