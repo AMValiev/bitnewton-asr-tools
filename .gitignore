@@ -6,7 +6,6 @@ __pycache__/
 # Environments
 .env
 .venv
-env/
 venv/
 ENV/
 env.bak/
@@ -31,3 +30,7 @@ python/
 *.log
 *_text.json
 *_sum.md
+fix_line_endings.py
+test_filename_normalization.py
+RELEASE_NOTES_DRAFT.md
+batch_process.ps1

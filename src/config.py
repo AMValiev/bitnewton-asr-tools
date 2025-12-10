@@ -14,13 +14,8 @@ def get_token(arg_token=None):
     # 1. Аргумент
     if arg_token:
         return arg_token
-    
-    # 2. Переменная окружения
-    env_token = os.environ.get("ASR_TOKEN")
-    if env_token:
-        return env_token.strip().strip('"').strip("'")
         
-    # 3. Файл конфигурации
+    # 2. Файл конфигурации
     if TOKEN_FILE.exists():
         try:
             token = TOKEN_FILE.read_text(encoding='utf-8').strip()

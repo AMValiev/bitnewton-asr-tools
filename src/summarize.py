@@ -16,12 +16,12 @@ def main():
 Позволяет выбрать готовый промпт или ввести свой собственный.
 """
     epilog = """
-Установка токена (ASR_TOKEN):
-  1. Через команду (рекомендуется):
+Установка токена:
+  Через команду:
      summarize --set-token "ваш_токен"
-  2. Переменная окружения:
-     PowerShell: $env:ASR_TOKEN="ваш_токен"
-     Bash: export ASR_TOKEN="ваш_токен"
+  
+  После этого токен будет сохранен в ~/.asr_token и вы сможете
+  использовать команды без указания --token.
 """
     parser = argparse.ArgumentParser(
         description=description,
@@ -57,7 +57,7 @@ def main():
     # Проверка токена
     if not token:
         print("Ошибка: Не найден токен.")
-        print("Используйте --set-token для сохранения токена или установите переменную окружения ASR_TOKEN.")
+        print("Используйте команду: summarize --set-token \"ваш_токен\"")
         sys.exit(1)
     
     # Инициализация клиента
@@ -78,6 +78,8 @@ def main():
     input_file = args.file
     if not input_file:
         print("Ошибка: Не указан входной файл.")
+        print("\nИспользование:")
+        parser.print_help()
         sys.exit(1)
         
     if not os.path.exists(input_file):
@@ -98,6 +100,29 @@ def main():
 
     # Получение промптов, если не указан prompt_id и не установлен --default
     prompt_id = args.prompt_id
+    user_prompt = args.user_prompt
+
+    # Проверяем, не является ли prompt_id названием файла в папке prompts
+    if prompt_id:
+        from prompts_manager import PromptManager
+        pm = PromptManager(client)
+        
+        # Ищем файл с таким именем (с расширением .txt или без)
+        potential_file = pm.prompts_dir / f"{prompt_id}.txt"
+        if not potential_file.exists():
+                potential_file = pm.prompts_dir / prompt_id
+        
+        if potential_file.exists() and potential_file.is_file():
+            try:
+                with open(potential_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                if content:
+                    print(f"Используется кастомный промпт из файла: {potential_file.name}")
+                    prompt_id = "custom"
+                    user_prompt = content
+            except Exception as e:
+                print(f"Ошибка чтения файла промпта {potential_file}: {e}")
+
     if not prompt_id and not args.default:
         from prompts_manager import PromptManager
         pm = PromptManager(client)
@@ -107,7 +132,7 @@ def main():
         if selected_id:
             prompt_id = selected_id
             if selected_content:
-                args.user_prompt = selected_content
+                user_prompt = selected_content
         else:
             print("Используется промпт по умолчанию: meeting_detailed")
             prompt_id = "meeting_detailed"
@@ -143,7 +168,7 @@ def main():
 
     # Создание задачи
     print("Создание задачи саммаризации...")
-    task_id = client.create_task(text, prompt_id, model=model, user_prompt=args.user_prompt)
+    task_id = client.create_task(text, prompt_id, model=model, user_prompt=user_prompt)
     
     if not task_id:
         print("Ошибка: Не удалось создать задачу.")

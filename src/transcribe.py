@@ -11,35 +11,7 @@ import re
 from pathlib import Path
 from client import ASRClient
 import config
-
-def normalize_telemost_filename(filename):
-    """
-    Нормализует имена файлов из Телемоста.
-    Пример: "Встреча в Телемосте 01.11.25 11-05-32 — запись Название.mp3" -> "202511011105 Название.mp3"
-    """
-    # Паттерн для поиска "Встреча в Телемосте DD.MM.YY HH-MM-SS"
-    pattern = r'^Встреча в Телемосте (\d{2})\.(\d{2})\.(\d{2}) (\d{2})-(\d{2})-(\d{2})\s*(?:—\s*запись\s*)?(.*)'
-    match = re.match(pattern, filename)
-    
-    if match:
-        day, month, year, hour, minute, second, rest = match.groups()
-        # Преобразуем год из YY в YYYY (предполагаем 20YY)
-        full_year = f"20{year}"
-        # Формируем дату+время
-        datetime_prefix = f"{full_year}{month}{day}{hour}{minute}"
-        
-        # Очищаем остаток имени от лишних пробелов
-        rest = rest.strip()
-        
-        # Формируем новое имя
-        if rest:
-            new_filename = f"{datetime_prefix} {rest}"
-        else:
-            new_filename = f"{datetime_prefix}{Path(filename).suffix}"
-        
-        return new_filename
-    
-    return filename
+from normalization import normalize_telemost_filename
 
 def main():
     description = """
@@ -52,12 +24,12 @@ def main():
   -> "202511011105 Название.mp3"
 """
     epilog = """
-Установка токена (ASR_TOKEN):
-  1. Через команду (рекомендуется):
+Установка токена:
+  Через команду:
      transcribe --set-token "ваш_токен"
-  2. Переменная окружения:
-     PowerShell: $env:ASR_TOKEN="ваш_токен"
-     Bash: export ASR_TOKEN="ваш_токен"
+  
+  После этого токен будет сохранен в ~/.asr_token и вы сможете
+  использовать команды без указания --token.
 """
     parser = argparse.ArgumentParser(
         description=description,
@@ -99,7 +71,7 @@ def main():
     # Проверка токена
     if not token:
         print("Ошибка: Не найден токен.")
-        print("Используйте --set-token для сохранения токена или установите переменную окружения ASR_TOKEN.")
+        print("Используйте команду: transcribe --set-token \"ваш_токен\"")
         sys.exit(1)
 
     # Если запрошен список промптов
@@ -121,6 +93,13 @@ def main():
         except Exception as e:
             print(f"Ошибка: {e}")
         sys.exit(0)
+
+    # Проверяем, что файл указан
+    if not args.file:
+        print("Ошибка: Не указан файл для транскрибации.")
+        print("\nИспользование:")
+        parser.print_help()
+        sys.exit(1)
 
     input_file = args.file
     if not os.path.exists(input_file):
@@ -261,12 +240,31 @@ def main():
                     
                     # Определяем prompt_id
                     prompt_id = args.prompt_id
+                    user_prompt = None
+
+                    # Проверяем, не является ли prompt_id названием файла в папке prompts
+                    # Это нужно для batch_process.ps1, который передает имя файла
+                    from prompts_manager import PromptManager
+                    pm = PromptManager(sum_client)
                     
+                    # Ищем файл с таким именем (с расширением .txt или без)
+                    potential_file = pm.prompts_dir / f"{prompt_id}.txt"
+                    if not potential_file.exists():
+                         potential_file = pm.prompts_dir / prompt_id
+                    
+                    if potential_file.exists() and potential_file.is_file():
+                        try:
+                            with open(potential_file, 'r', encoding='utf-8') as f:
+                                content = f.read().strip()
+                            if content:
+                                print(f"Используется кастомный промпт из файла: {potential_file.name}")
+                                prompt_id = "custom"
+                                user_prompt = content
+                        except Exception as e:
+                            print(f"Ошибка чтения файла промпта {potential_file}: {e}")
+
                     # Если prompt_id не был явно указан и не установлен --default, спрашиваем
-                    if prompt_id == "meeting_detailed" and "--prompt-id" not in sys.argv and not args.default:
-                        from prompts_manager import PromptManager
-                        pm = PromptManager(sum_client)
-                        
+                    if prompt_id == "meeting_detailed" and "--prompt-id" not in sys.argv and not args.default and not user_prompt:
                         selected_id, selected_content = pm.select_prompt_interactive()
                         
                         if selected_id:
